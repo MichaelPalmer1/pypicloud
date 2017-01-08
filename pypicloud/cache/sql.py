@@ -6,6 +6,7 @@ import transaction
 from pkg_resources import parse_version
 from sqlalchemy import (engine_from_config, distinct, Column, DateTime, Text,
                         String)
+from sqlalchemy import or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import TypeDecorator, TEXT
@@ -81,7 +82,11 @@ class SQLPackage(Package, Base):
     name = Column(String(255, convert_unicode=True), index=True, nullable=False)
     version = Column(String(50, convert_unicode=True), nullable=False)
     last_modified = Column(DateTime(), index=True, nullable=False)
-    data = Column(JSONEncodedDict(), nullable=False)
+    summary = Column(String(255, convert_unicode=True), index=True, nullable=True)
+    description = Column(String(255, convert_unicode=True), index=True, nullable=True)
+    author = Column(String(255, convert_unicode=True), index=True, nullable=True)
+    author_email = Column(String(255, convert_unicode=True), index=True, nullable=True)
+    data = Column(JSONEncodedDict(), nullable=True)
 
 
 def create_schema(engine):
@@ -163,6 +168,29 @@ class SQLCache(ICache):
             .order_by(SQLPackage.name).all()
         return [n[0] for n in names]
 
+    def search(self, query, query_type):
+        ordering = 0
+        conditions = []
+        packages = []
+        for key, queries in query.items():
+            for item in queries:
+                conditions.append(getattr(SQLPackage, key).like('%' + item + '%'))
+
+        if query_type == 'or':
+            results = self.db.query(SQLPackage).filter(or_(*conditions))
+        else:
+            results = self.db.query(SQLPackage).filter(*conditions)
+
+        for result in results.all():
+            packages.append({
+                '_pypi_ordering': ordering,
+                'version': result.version,
+                'name': result.name,
+                'summary': result.summary
+            })
+            ordering += 1
+        return packages
+
     def summary(self):
         packages = {}
         for package in self.db.query(SQLPackage):
@@ -173,6 +201,7 @@ class SQLCache(ICache):
                     'stable': None,
                     'unstable': '0',
                     'last_modified': datetime.fromtimestamp(0),
+                    'summary': package.summary
                 }
                 packages[package.name] = pkg
             if not package.is_prerelease:

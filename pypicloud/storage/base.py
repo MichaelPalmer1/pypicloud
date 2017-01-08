@@ -44,7 +44,7 @@ class IStorage(object):
         """
         raise NotImplementedError
 
-    def upload(self, package, data):
+    def upload(self, package, data, **kwargs):
         """
         Upload a package file to the storage backend
 
@@ -54,6 +54,8 @@ class IStorage(object):
             The package metadata
         data : file
             A file-like object that contains the package data
+        kwargs : dict
+            Keyword arguments
 
         """
         raise NotImplementedError

@@ -72,7 +72,7 @@ class ICache(object):
         for pkg in packages:
             self.save(pkg)
 
-    def upload(self, filename, data, name=None, version=None):
+    def upload(self, filename, data, name=None, version=None, **kwargs):
         """
         Save this package to the storage mechanism and to the cache
 
@@ -107,8 +107,8 @@ class ICache(object):
         old_pkg = self.fetch(filename)
         if old_pkg is not None and not self.allow_overwrite:
             raise ValueError("Package '%s' already exists!" % filename)
-        new_pkg = self.package_class(name, version, filename)
-        self.storage.upload(new_pkg, data)
+        new_pkg = self.package_class(name, version, filename, **kwargs)
+        self.storage.upload(new_pkg, data, **kwargs)
         self.save(new_pkg)
         return new_pkg
 
@@ -188,6 +188,7 @@ class ICache(object):
                 'stable': None,
                 'unstable': '0',
                 'last_modified': datetime.fromtimestamp(0),
+                'summary': None
             }
             for package in self.all(name):
                 if not package.is_prerelease:

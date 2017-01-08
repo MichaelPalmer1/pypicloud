@@ -77,6 +77,26 @@ class RedisCache(ICache):
     def distinct(self):
         return list(self.db.smembers(self.redis_set))
 
+    def search(self, query, query_type):
+        ordering = 0
+        conditions = set(query['name'])
+        packages = []
+        results = self.distinct()
+
+        for result in results:
+            for condition in conditions:
+                if condition in result:
+                    package = self.fetch(result)
+                    packages.append({
+                        '_pypi_ordering': ordering,
+                        'version': package.version,
+                        'name': package.name,
+                        'summary': package.summary
+                    })
+                    ordering += 1
+
+        return packages
+
     def clear(self, package):
         del self.db[self.redis_key(package.filename)]
         self.db.srem(self.redis_filename_set(package.name), package.filename)
@@ -96,6 +116,10 @@ class RedisCache(ICache):
             'version': package.version,
             'filename': package.filename,
             'last_modified': package.last_modified.strftime('%s.%f'),
+            'summary': package.summary,
+            'description': package.description,
+            'author': package.author,
+            'author_email': package.author_email,
         }
         for key, value in package.data.iteritems():
             data[key] = json.dumps(value)

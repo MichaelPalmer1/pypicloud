@@ -6,6 +6,7 @@ import six
 from pyramid.httpexceptions import HTTPBadRequest, HTTPFound, HTTPNotFound
 from pyramid.view import view_config
 from pyramid_duh import argify, addslash
+from pyramid_rpc.xmlrpc import xmlrpc_method
 
 from pypicloud.route import Root, SimplePackageResource, SimpleResource
 from pypicloud.util import normalize_name, parse_filename
@@ -30,12 +31,17 @@ def upload(request, content, name=None, version=None):
         if not request.access.has_permission(name, 'write'):
             return request.forbid()
         try:
-            return request.db.upload(content.filename, content.file, name=name,
-                                     version=version)
+            data = parse_params(request.params)
+            return request.db.upload(content.filename, content.file, **data)
         except ValueError as e:
             return HTTPBadRequest(*e.args)
     else:
         return HTTPBadRequest("Unknown action '%s'" % action)
+
+
+@xmlrpc_method(endpoint='pypi')
+def search(request, query, query_type):
+    return request.db.search(query, query_type)
 
 
 @view_config(context=SimpleResource, request_method='GET', subpath=(),
@@ -72,6 +78,20 @@ def package_versions(context, request):
             return _simple_cache(context, request)
     else:
         return _simple_serve(context, request)
+
+
+def parse_params(params):
+    # Get rid of data that is not needed
+    remove_items = [
+        'name', 'version', 'content', ':action', 'filetype', 'protcol_version', 'metadata_version', 'pyversion'
+    ]
+    data = dict(params)
+    for item in remove_items:
+        del data[item]
+    for key, value in data.items():
+        if value == 'UNKNOWN' or value == '':
+            data[key] = None
+    return data
 
 
 def get_fallback_packages(request, package_name, redirect=True):
