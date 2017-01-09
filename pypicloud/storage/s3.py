@@ -156,8 +156,9 @@ class S3Storage(IStorage):
 
             last_modified = boto.utils.parse_ts(key.last_modified)
 
-            pkg = factory(name, version, filename, last_modified, path=key.key,
-                          summary=summary, author=author, author_email=author_email)
+            pkg = factory(name, version, filename, last_modified, summary,
+                          path=key.key, author=author,
+                          author_email=author_email)
 
             yield pkg
 
@@ -175,7 +176,7 @@ class S3Storage(IStorage):
     def download_response(self, package):
         return HTTPFound(location=self._generate_url(package))
 
-    def upload(self, package, data, **kwargs):
+    def upload(self, package, data):
         key = Key(self.bucket)
         key.key = self.get_path(package)
         key.set_metadata('name', package.name)

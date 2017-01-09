@@ -43,15 +43,14 @@ class Package(object):
         self.version = version
         self._parsed_version = None
         self.filename = filename
-        self.summary = summary
-        self.description = description
-        self.author = author
-        self.author_email = author_email
-
         if last_modified is not None:
             self.last_modified = last_modified
         else:
             self.last_modified = datetime.utcnow()
+        self.summary = summary
+        self.description = description
+        self.author = author
+        self.author_email = author_email
         self.data = kwargs
 
     def get_url(self, request):

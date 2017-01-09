@@ -4,9 +4,8 @@ from datetime import datetime
 import logging
 import transaction
 from pkg_resources import parse_version
-from sqlalchemy import (engine_from_config, distinct, Column, DateTime, Text,
+from sqlalchemy import (engine_from_config, distinct, or_, Column, DateTime,
                         String)
-from sqlalchemy import or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import TypeDecorator, TEXT
@@ -86,7 +85,7 @@ class SQLPackage(Package, Base):
     description = Column(String(255, convert_unicode=True), index=True, nullable=True)
     author = Column(String(255, convert_unicode=True), index=True, nullable=True)
     author_email = Column(String(255, convert_unicode=True), index=True, nullable=True)
-    data = Column(JSONEncodedDict(), nullable=True)
+    data = Column(JSONEncodedDict(), nullable=False)
 
 
 def create_schema(engine):
@@ -168,13 +167,21 @@ class SQLCache(ICache):
             .order_by(SQLPackage.name).all()
         return [n[0] for n in names]
 
-    def search(self, query, query_type):
-        ordering = 0
+    def search(self, criteria, query_type):
+        """ Perform a search. """
         conditions = []
         packages = []
-        for key, queries in query.items():
-            for item in queries:
-                conditions.append(getattr(SQLPackage, key).like('%' + item + '%'))
+        for key, queries in criteria.items():
+            # Make sure search key exists in the package class.
+            # It should be either "name" or "summary".
+            field = getattr(self.package_class, key, None)
+            if not field:
+                continue
+
+            for query in queries:
+                # Generate condition and add to list
+                condition = field.like('%' + query + '%')
+                conditions.append(condition)
 
         if query_type == 'or':
             results = self.db.query(SQLPackage).filter(or_(*conditions))
@@ -183,12 +190,10 @@ class SQLCache(ICache):
 
         for result in results.all():
             packages.append({
-                '_pypi_ordering': ordering,
-                'version': result.version,
                 'name': result.name,
-                'summary': result.summary
+                'summary': result.summary,
+                'version': result.version,
             })
-            ordering += 1
         return packages
 
     def summary(self):

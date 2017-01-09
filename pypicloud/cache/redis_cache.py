@@ -61,9 +61,10 @@ class RedisCache(ICache):
         filename = data.pop('filename')
         last_modified = datetime.fromtimestamp(
             float(data.pop('last_modified')))
+        summary = data.pop('summary')
         kwargs = dict(((k, json.loads(v)) for k, v in data.iteritems()))
         return self.package_class(name, version, filename, last_modified,
-                                  **kwargs)
+                                  summary, **kwargs)
 
     def all(self, name):
         filenames = self.db.smembers(self.redis_filename_set(name))
@@ -76,26 +77,6 @@ class RedisCache(ICache):
 
     def distinct(self):
         return list(self.db.smembers(self.redis_set))
-
-    def search(self, query, query_type):
-        ordering = 0
-        conditions = set(query['name'])
-        packages = []
-        results = self.distinct()
-
-        for result in results:
-            for condition in conditions:
-                if condition in result:
-                    package = self.fetch(result)
-                    packages.append({
-                        '_pypi_ordering': ordering,
-                        'version': package.version,
-                        'name': package.name,
-                        'summary': package.summary
-                    })
-                    ordering += 1
-
-        return packages
 
     def clear(self, package):
         del self.db[self.redis_key(package.filename)]

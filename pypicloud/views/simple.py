@@ -19,7 +19,7 @@ LOG = logging.getLogger(__name__)
 @view_config(context=SimpleResource, request_method='POST', subpath=(),
              renderer='json')
 @argify
-def upload(request, content, name=None, version=None):
+def upload(request, content, name=None, version=None, summary=None):
     """ Handle update commands """
     action = request.param(':action', 'file_upload')
     # Direct uploads from the web UI go here, and don't have a name/version
@@ -31,8 +31,9 @@ def upload(request, content, name=None, version=None):
         if not request.access.has_permission(name, 'write'):
             return request.forbid()
         try:
-            data = parse_params(request.params)
-            return request.db.upload(content.filename, content.file, **data)
+            return request.db.upload(content.filename, content.file, name=name,
+                                     version=version, summary=summary,
+                                     **request.params)
         except ValueError as e:
             return HTTPBadRequest(*e.args)
     else:
@@ -40,8 +41,13 @@ def upload(request, content, name=None, version=None):
 
 
 @xmlrpc_method(endpoint='pypi')
-def search(request, query, query_type):
-    return request.db.search(query, query_type)
+def search(request, criteria, query_type):
+    """
+    Perform searches from pip. This handles XML RPC requests to the "pypi"
+    endpoint (configured as /pypi/) that specify the method "search".
+
+    """
+    return request.db.search(criteria, query_type)
 
 
 @view_config(context=SimpleResource, request_method='GET', subpath=(),
@@ -78,20 +84,6 @@ def package_versions(context, request):
             return _simple_cache(context, request)
     else:
         return _simple_serve(context, request)
-
-
-def parse_params(params):
-    # Get rid of data that is not needed
-    remove_items = [
-        'name', 'version', 'content', ':action', 'filetype', 'protcol_version', 'metadata_version', 'pyversion'
-    ]
-    data = dict(params)
-    for item in remove_items:
-        del data[item]
-    for key, value in data.items():
-        if value == 'UNKNOWN' or value == '':
-            data[key] = None
-    return data
 
 
 def get_fallback_packages(request, package_name, redirect=True):
