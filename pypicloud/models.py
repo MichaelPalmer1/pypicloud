@@ -26,19 +26,13 @@ class Package(object):
         The datetime when this package was uploaded (default now)
     summary : str, optional
         The summary of the package
-    description : str, optional
-        The description of the package
-    author : str, optional
-        The author of the package
-    author_email : str, optional
-        The author email of the package
     **kwargs : dict
         Metadata about the package
 
     """
 
-    def __init__(self, name, version, filename, last_modified=None, summary=None,
-                 description=None, author=None, author_email=None, **kwargs):
+    def __init__(self, name, version, filename, last_modified=None,
+                 summary=None, **kwargs):
         self.name = normalize_name(name)
         self.version = version
         self._parsed_version = None
@@ -48,10 +42,9 @@ class Package(object):
         else:
             self.last_modified = datetime.utcnow()
         self.summary = summary
-        self.description = description
-        self.author = author
-        self.author_email = author_email
         self.data = kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def get_url(self, request):
         """ Create path to the download link """
@@ -97,8 +90,5 @@ class Package(object):
             'version': self.version,
             'url': self.get_url(request),
             'summary': self.summary,
-            'description': self.description,
-            'author': self.author,
-            'author_email': self.author_email,
             'data': self.data,
         }

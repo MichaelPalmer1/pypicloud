@@ -1,4 +1,5 @@
 """ Views for simple pip interaction """
+import inspect
 import posixpath
 
 import logging
@@ -19,7 +20,7 @@ LOG = logging.getLogger(__name__)
 @view_config(context=SimpleResource, request_method='POST', subpath=(),
              renderer='json')
 @argify
-def upload(request, content, name=None, version=None, summary=None):
+def upload(request, content, name=None, version=None, **kwargs):
     """ Handle update commands """
     action = request.param(':action', 'file_upload')
     # Direct uploads from the web UI go here, and don't have a name/version
@@ -31,9 +32,9 @@ def upload(request, content, name=None, version=None, summary=None):
         if not request.access.has_permission(name, 'write'):
             return request.forbid()
         try:
+            kwargs.pop(':action', None)
             return request.db.upload(content.filename, content.file, name=name,
-                                     version=version, summary=summary,
-                                     **request.params)
+                                     version=version, **kwargs)
         except ValueError as e:
             return HTTPBadRequest(*e.args)
     else:

@@ -71,7 +71,7 @@ class FileStorage(IStorage):
                             request=self.request,
                             content_type='application/octet-stream')
 
-    def upload(self, package, data):
+    def upload(self, package, data, **kwargs):
         destfile = self.get_path(package)
         dest_meta_file = self.get_path(package, metadata=True)
         destdir = os.path.dirname(destfile)
@@ -83,7 +83,9 @@ class FileStorage(IStorage):
         # to store additional metadata about a package (i.e. author)
         tempfile = os.path.join(destdir, '.metadata.' + uid)
         with open(tempfile, 'w') as mfile:
-            json_data = json.dumps(package.data)
+            metadata = package.data
+            metadata.update({'summary': package.summary})
+            json_data = json.dumps(metadata)
             mfile.write(json_data)
 
         os.rename(tempfile, dest_meta_file)

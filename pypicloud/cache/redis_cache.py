@@ -98,9 +98,6 @@ class RedisCache(ICache):
             'filename': package.filename,
             'last_modified': package.last_modified.strftime('%s.%f'),
             'summary': package.summary,
-            'description': package.description,
-            'author': package.author,
-            'author_email': package.author_email,
         }
         for key, value in package.data.iteritems():
             data[key] = json.dumps(value)
