@@ -187,6 +187,7 @@ class SQLCache(ICache):
 
         for result in results.all():
             packages.append({
+                '_pypi_ordering': False,
                 'name': result.name,
                 'summary': result.summary,
                 'version': result.version,

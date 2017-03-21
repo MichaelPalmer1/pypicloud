@@ -192,6 +192,10 @@ class ICache(object):
         query_type : str
             Type of query to perform. By default, pip sends "or".
 
+        Returns
+        -------
+        packages : list
+
         """
         name_queries = criteria.get('name', [])
         summary_queries = criteria.get('summary', [])
@@ -213,6 +217,7 @@ class ICache(object):
                         # set and generating a result
                         packages_found.add(package.name)
                         packages.append({
+                            '_pypi_ordering': False,
                             'name': package.name,
                             'summary': package.summary,
                             'version': package.version,
@@ -230,6 +235,7 @@ class ICache(object):
                         # set and generating a result
                         packages_found.add(package.name)
                         packages.append({
+                            '_pypi_ordering': False,
                             'name': package.name,
                             'summary': package.summary,
                             'version': package.version,

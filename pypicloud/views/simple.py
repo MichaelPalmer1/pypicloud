@@ -2,6 +2,8 @@
 import posixpath
 
 import logging
+from xmlrpclib import ServerProxy
+
 import six
 from pyramid.httpexceptions import HTTPBadRequest, HTTPFound, HTTPNotFound
 from pyramid.view import view_config
@@ -46,7 +48,20 @@ def search(request, criteria, query_type):
     endpoint (configured as /pypi/) that specify the method "search".
 
     """
-    return request.db.search(criteria, query_type)
+    local_results = request.db.search(criteria, query_type)
+
+    # Return local results if fallback is disabled
+    if request.registry.fallback == 'none':
+        return local_results
+
+    # Search the fallback url as well
+    proxy = ServerProxy(request.registry.fallback_url)
+    results = proxy.search(criteria, query_type)
+
+    # Merge the results together, sort, and return
+    results.extend(local_results)
+    results.sort()
+    return results
 
 
 @view_config(context=SimpleResource, request_method='GET', subpath=(),
