@@ -1,10 +1,10 @@
 """ Model objects """
 import re
-from datetime import datetime
 
 import pkg_resources
+from datetime import datetime
+from functools import total_ordering
 
-from .compat import total_ordering
 from .util import normalize_name
 
 
@@ -88,4 +88,12 @@ class Package(object):
             'version': self.version,
             'url': self.get_url(request),
             'summary': self.summary,
+        }
+
+    def search_summary(self):
+        """ Data to return from a pip search """
+        return {
+            'name': self.name,
+            'summary': self.summary or '',  # May be None
+            'version': self.version,
         }

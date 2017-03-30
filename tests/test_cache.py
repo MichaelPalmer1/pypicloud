@@ -4,7 +4,7 @@ import sys
 import transaction
 import calendar
 from redis import ConnectionError
-from mock import MagicMock, patch, ANY
+from mock import MagicMock, patch
 from pyramid.testing import DummyRequest
 from sqlalchemy.exc import OperationalError
 
@@ -140,15 +140,13 @@ class TestBaseCache(unittest.TestCase):
             cache.clear_all()
         with self.assertRaises(NotImplementedError):
             cache.save(make_package())
-        with self.assertRaises(NotImplementedError):
-            cache.search({'name': [], 'summary': []}, 'or')
 
 
 class TestSQLiteCache(unittest.TestCase):
 
     """ Tests for the SQLAlchemy cache """
 
-    DB_URL = 'sqlite:///:memory:'
+    DB_URL = 'sqlite://'
 
     @classmethod
     def setUpClass(cls):
@@ -285,7 +283,7 @@ class TestSQLiteCache(unittest.TestCase):
         saved_pkgs = self.db.distinct()
         self.assertItemsEqual(saved_pkgs, set([p.name for p in pkgs]))
 
-    def test_search(self):
+    def test_search_or(self):
         """ search() returns packages that match the query """
         pkgs = [
             make_package(factory=SQLPackage),
@@ -297,27 +295,23 @@ class TestSQLiteCache(unittest.TestCase):
         ]
         self.sql.add_all(pkgs)
         criteria = {'name': ['mypkg'], 'summary': ['mypkg']}
-        expected = [
-            {
-                'name': 'mypkg',
-                'version': '1.1',
-                'summary': 'summary'
-            },
-            {
-                'name': 'somepackage',
-                'version': '1.3',
-                'summary': 'this is mypkg'
-            },
-            {
-                'name': 'mypkg2',
-                'version': '1.3.4',
-                'summary': 'summary'
-            }
-        ]
         packages = self.db.search(criteria, 'or')
-        packages.sort(key=lambda item: (item['name'], item['version']))
-        expected.sort(key=lambda item: (item['name'], item['version']))
-        self.assertListEqual(packages, expected)
+        self.assertItemsEqual(packages, pkgs[:-1])
+
+    def test_search_and(self):
+        """ search() returns packages that match the query """
+        pkgs = [
+            make_package(factory=SQLPackage),
+            make_package('somepackage', version='1.3', filename='mypath3',
+                         summary='this is mypkg', factory=SQLPackage),
+            make_package('mypkg2', '1.3.4', 'my/other/path',
+                         factory=SQLPackage),
+            make_package('package', factory=SQLPackage),
+        ]
+        self.sql.add_all(pkgs)
+        criteria = {'name': ['my', 'pkg'], 'summary': ['this', 'mypkg']}
+        packages = self.db.search(criteria, 'and')
+        self.assertItemsEqual(packages, pkgs[:-1])
 
     def test_summary(self):
         """ summary constructs per-package metadata summary """
@@ -368,7 +362,7 @@ class TestSQLiteCache(unittest.TestCase):
 class TestMySQLCache(TestSQLiteCache):
     """ Test the SQLAlchemy cache on a MySQL DB """
 
-    DB_URL = 'mysql://root@127.0.0.1:3306/test'
+    DB_URL = 'mysql://root@127.0.0.1:3306/test?charset=utf8mb4'
 
 
 class TestPostgresCache(TestSQLiteCache):
@@ -416,11 +410,14 @@ class TestRedisCache(unittest.TestCase):
         """ Assert that a package exists in redis """
         self.assertTrue(self.redis.sismember(self.db.redis_set, pkg.name))
         data = self.redis.hgetall(self.db.redis_key(pkg.filename))
+        dt = pkg.last_modified
+        lm = calendar.timegm(dt.utctimetuple()) + dt.microsecond / 1000000.0
+        lm_str = ("%.6f" % lm).rstrip('0').rstrip('.')
         pkg_data = {
             'name': pkg.name,
             'version': pkg.version,
             'filename': pkg.filename,
-            'last_modified': pkg.last_modified.strftime('%s.%f'),
+            'last_modified': lm_str,
             'summary': pkg.summary,
         }
         pkg_data.update(pkg.data)
@@ -545,7 +542,7 @@ class TestRedisCache(unittest.TestCase):
         saved_pkgs = self.db.distinct()
         self.assertItemsEqual(saved_pkgs, set([p.name for p in pkgs]))
 
-    def test_search(self):
+    def test_search_or(self):
         """ search() returns packages that match the query """
         pkgs = [
             make_package(factory=SQLPackage),
@@ -558,27 +555,24 @@ class TestRedisCache(unittest.TestCase):
         for pkg in pkgs:
             self.db.save(pkg)
         criteria = {'name': ['mypkg'], 'summary': ['mypkg']}
-        expected = [
-            {
-                'name': 'somepackage',
-                'version': '1.3',
-                'summary': 'this is mypkg'
-            },
-            {
-                'name': 'mypkg2',
-                'version': '1.3.4',
-                'summary': 'summary'
-            },
-            {
-                'name': 'mypkg',
-                'version': '1.1',
-                'summary': 'summary'
-            }
-        ]
         packages = self.db.search(criteria, 'or')
-        packages.sort(key=lambda item: (item['name'], item['version']))
-        expected.sort(key=lambda item: (item['name'], item['version']))
-        self.assertListEqual(packages, expected)
+        self.assertItemsEqual(packages, pkgs[:-1])
+
+    def test_search_and(self):
+        """ search() returns packages that match the query """
+        pkgs = [
+            make_package(factory=SQLPackage),
+            make_package('somepackage', version='1.3', filename='mypath3',
+                         summary='this is mypkg', factory=SQLPackage),
+            make_package('mypkg2', '1.3.4', 'my/other/path',
+                         factory=SQLPackage),
+            make_package('package', factory=SQLPackage),
+        ]
+        for pkg in pkgs:
+            self.db.save(pkg)
+        criteria = {'name': ['my', 'pkg'], 'summary': ['this', 'mypkg']}
+        packages = self.db.search(criteria, 'and')
+        self.assertItemsEqual(packages, pkgs[:-1])
 
     def test_multiple_packages_same_version(self):
         """ Can upload multiple packages that have the same version """
@@ -729,7 +723,7 @@ class TestDynamoCache(unittest.TestCase):
         saved_pkgs = self.db.distinct()
         self.assertItemsEqual(saved_pkgs, set([p.name for p in pkgs]))
 
-    def test_search(self):
+    def test_search_or(self):
         """ search() returns packages that match the query """
         pkgs = [
             make_package(factory=DynamoPackage),
@@ -741,25 +735,23 @@ class TestDynamoCache(unittest.TestCase):
         ]
         self._save_pkgs(*pkgs)
         criteria = {'name': ['mypkg'], 'summary': ['mypkg']}
-        expected = [
-            {
-                'name': 'mypkg',
-                'version': '1.1',
-                'summary': 'summary'
-            },
-            {
-                'name': 'mypkg2',
-                'version': '1.3.4',
-                'summary': 'summary'
-            },
-            {
-                'name': 'somepackage',
-                'version': '1.3',
-                'summary': 'this is mypkg'
-            },
-        ]
         packages = self.db.search(criteria, 'or')
-        self.assertListEqual(packages, expected)
+        self.assertItemsEqual(packages, pkgs[:-1])
+
+    def test_search_and(self):
+        """ search() returns packages that match the query """
+        pkgs = [
+            make_package(factory=DynamoPackage),
+            make_package('somepackage', version='1.3', filename='mypath3',
+                         summary='this is mypkg', factory=DynamoPackage),
+            make_package('mypkg2', '1.3.4', 'my/other/path',
+                         factory=DynamoPackage),
+            make_package('package', factory=DynamoPackage),
+        ]
+        self._save_pkgs(*pkgs)
+        criteria = {'name': ['my', 'pkg'], 'summary': ['this', 'mypkg']}
+        packages = self.db.search(criteria, 'and')
+        self.assertItemsEqual(packages, pkgs[:-1])
 
     def test_summary(self):
         """ summary constructs per-package metadata summary """

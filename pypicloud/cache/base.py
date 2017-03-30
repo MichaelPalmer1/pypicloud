@@ -8,8 +8,7 @@ from pyramid.settings import asbool
 import posixpath
 from pypicloud.models import Package
 from pypicloud.storage import get_storage_impl
-from pypicloud.util import parse_filename, normalize_name
-
+from pypicloud.util import create_matcher, parse_filename, normalize_name
 
 LOG = logging.getLogger(__name__)
 
@@ -200,46 +199,25 @@ class ICache(object):
         name_queries = criteria.get('name', [])
         summary_queries = criteria.get('summary', [])
         packages = []
-        packages_found = set()
+
+        # Create matchers for the queries
+        match_name = create_matcher(name_queries, query_type)
+        match_summary = create_matcher(summary_queries, query_type)
 
         for key in self.distinct():
             # Search all versions of this package key
+            latest = None
             for package in self.all(key):
-                # Skip this result if it has already been selected
-                if package.name in packages_found:
-                    continue
-
-                # Search package names
-                for query in name_queries:
-                    # Look for this query anywhere in the package name
-                    if query.lower() in package.name.lower():
-                        # Found a match, adding to the packages_found
-                        # set and generating a result
-                        packages_found.add(package.name)
-                        packages.append({
-                            '_pypi_ordering': False,
-                            'name': package.name,
-                            'summary': package.summary,
-                            'version': package.version,
-                        })
-
-                # Skip this result if it was selected by the name search
-                if package.name in packages_found:
-                    continue
-
-                # Search package summaries
-                for query in summary_queries:
-                    # Look for this query anywhere in the package summary
-                    if query.lower() in package.summary.lower():
-                        # Found a match, adding to the packages_found
-                        # set and generating a result
-                        packages_found.add(package.name)
-                        packages.append({
-                            '_pypi_ordering': False,
-                            'name': package.name,
-                            'summary': package.summary,
-                            'version': package.version,
-                        })
+                # Search for a match. If we've already found a match, make sure
+                # we find the most recent version that matches.
+                if latest is None or package > latest:
+                    if match_name(package.name):
+                        latest = package
+                    elif (package.summary is not None and
+                          match_summary(package.summary)):
+                        latest = package
+            if latest is not None:
+                packages.append(latest)
 
         return packages
 

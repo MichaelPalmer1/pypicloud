@@ -5,7 +5,8 @@ import logging
 from xmlrpclib import ServerProxy
 
 import six
-from pyramid.httpexceptions import HTTPBadRequest, HTTPFound, HTTPNotFound
+from pyramid.httpexceptions import (HTTPBadRequest, HTTPFound, HTTPNotFound,
+                                    HTTPConflict)
 from pyramid.view import view_config
 from pyramid_duh import argify, addslash
 from pyramid_rpc.xmlrpc import xmlrpc_method
@@ -36,7 +37,7 @@ def upload(request, content, name=None, version=None, summary=None):
             return request.db.upload(content.filename, content.file, name=name,
                                      version=version, summary=summary)
         except ValueError as e:
-            return HTTPBadRequest(*e.args)
+            return HTTPConflict(*e.args)
     else:
         return HTTPBadRequest("Unknown action '%s'" % action)
 
@@ -48,18 +49,21 @@ def search(request, criteria, query_type):
     endpoint (configured as /pypi/) that specify the method "search".
 
     """
-    local_results = request.db.search(criteria, query_type)
+    filtered = []
+    for pkg in request.db.search(criteria, query_type):
+        if request.access.has_permission(pkg.name, 'read'):
+            filtered.append(pkg.search_summary())
 
     # Return local results if fallback is disabled
     if request.registry.fallback == 'none':
-        return local_results
+        return filtered
 
     # Search the fallback url as well
     proxy = ServerProxy(request.registry.fallback_url)
     results = proxy.search(criteria, query_type)
 
     # Merge the results together, sort, and return
-    results.extend(local_results)
+    results.extend(filtered)
     results.sort()
     return results
 
