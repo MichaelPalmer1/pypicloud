@@ -1,7 +1,7 @@
 """ Store package data in redis """
-from datetime import datetime
-
+import calendar
 import json
+from datetime import datetime
 
 from .base import ICache
 
@@ -24,7 +24,7 @@ class RedisCache(ICache):
             raise ImportError("You must 'pip install redis' before using "
                               "redis as the database")
         db_url = settings.get('db.url')
-        kwargs['db'] = StrictRedis.from_url(db_url)
+        kwargs['db'] = StrictRedis.from_url(db_url, decode_responses=True)
         return kwargs
 
     def redis_key(self, key):
@@ -59,11 +59,12 @@ class RedisCache(ICache):
         name = data.pop('name')
         version = data.pop('version')
         filename = data.pop('filename')
-        last_modified = datetime.fromtimestamp(
+        last_modified = datetime.utcfromtimestamp(
             float(data.pop('last_modified')))
+        summary = data.pop('summary')
         kwargs = dict(((k, json.loads(v)) for k, v in data.iteritems()))
         return self.package_class(name, version, filename, last_modified,
-                                  **kwargs)
+                                  summary, **kwargs)
 
     def all(self, name):
         filenames = self.db.smembers(self.redis_filename_set(name))
@@ -91,11 +92,13 @@ class RedisCache(ICache):
     def save(self, package, pipe=None):
         if pipe is None:
             pipe = self.db
+        dt = package.last_modified
         data = {
             'name': package.name,
             'version': package.version,
             'filename': package.filename,
-            'last_modified': package.last_modified.strftime('%s.%f'),
+            'last_modified': calendar.timegm(dt.utctimetuple()) + dt.microsecond / 1000000.0,
+            'summary': package.summary,
         }
         for key, value in package.data.iteritems():
             data[key] = json.dumps(value)

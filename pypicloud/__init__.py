@@ -1,10 +1,12 @@
 """ S3-backed pypi server """
 import os
 import sys
-import traceback
+
+import calendar
 import datetime
 
 import logging
+import traceback
 from pyramid.config import Configurator
 from pyramid.renderers import JSON, render
 from pyramid.settings import asbool
@@ -15,7 +17,7 @@ from .route import Root
 from .util import BetterScrapingLocator
 
 
-__version__ = '0.4.4'
+__version__ = '0.5.0'
 LOG = logging.getLogger(__name__)
 
 
@@ -25,7 +27,7 @@ def to_json(value):
 
 json_renderer = JSON()  # pylint: disable=C0103
 json_renderer.add_adapter(datetime.datetime, lambda obj, r:
-                          float(obj.strftime('%s.%f')))
+                          calendar.timegm(obj.utctimetuple()))
 
 
 def _app_url(request, *paths, **params):
@@ -51,6 +53,7 @@ def includeme(config):
     config.include('pyramid_beaker')
     config.include('pyramid_duh')
     config.include('pyramid_duh.auth')
+    config.include('pyramid_rpc.xmlrpc')
     config.include('pypicloud.auth')
     config.include('pypicloud.access')
     config.include('pypicloud.cache')
@@ -113,6 +116,8 @@ def includeme(config):
     config.add_static_view(name='static/%s' % __version__,
                            path='pypicloud:static',
                            cache_max_age=cache_max_age)
+
+    config.add_xmlrpc_endpoint('pypi', '/pypi/')
 
 
 def traceback_formatter(excpt, value, tback):
