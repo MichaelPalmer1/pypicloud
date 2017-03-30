@@ -95,6 +95,6 @@ class Package(object):
         return {
             '_pypi_ordering': False,
             'name': self.name,
-            'summary': self.summary or 'UNKNOWN',  # May be None
+            'summary': self.summary or '',  # May be None
             'version': self.version,
         }
